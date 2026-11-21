@@ -1,0 +1,1347 @@
+<!DOCTYPE html>
+<html lang="sr" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Finansijski Planer & Kalkulator Otplate Dugova</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Firebase SDK Compat CDN (Ubačeno ovde u zaglavlje) -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0fdf4',
+                            500: '#22c55e',
+                            600: '#16a34a',
+                            700: '#15803d',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(0,0,0,0.1);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(150,150,150,0.4);
+            border-radius: 4px;
+        }
+
+        /* Textured Background pattern */
+        .bg-textured-dark {
+            background-color: #0f172a;
+            background-image: radial-gradient(#334155 1px, transparent 1px);
+            background-size: 24px 24px;
+        }
+        .bg-textured-light {
+            background-color: #f8fafc;
+            background-image: radial-gradient(#cbd5e1 1px, transparent 1px);
+            background-size: 24px 24px;
+        }
+
+        /* Zoom Container Support */
+        #app-viewport {
+            transform-origin: top center;
+            transition: transform 0.1s ease-out;
+        }
+
+        @media print {
+            .no-print {
+                display: none !important;
+            }
+            body {
+                background: white !important;
+                color: black !important;
+            }
+            #app-viewport {
+                transform: scale(1) !important;
+            }
+        }
+    </style>
+</head>
+<body class="bg-textured-dark text-slate-100 min-h-screen flex flex-col justify-between selection:bg-brand-500 selection:text-white" id="app-body">
+
+    <!-- Top Navigation Header -->
+    <header class="no-print sticky top-0 z-40 backdrop-blur-md bg-slate-900/80 dark:bg-slate-900/80 border-b border-slate-700/50 px-4 py-3 shadow-lg">
+        <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
+            
+            <!-- Logo & Title -->
+            <div class="flex items-center space-x-3">
+                <div class="bg-gradient-to-tr from-brand-600 to-emerald-400 p-2.5 rounded-xl shadow-md shadow-brand-500/20 text-white">
+                    <i class="fa-solid fa-wallet text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-lg leading-tight tracking-tight text-slate-900 dark:text-white" data-i18n="appTitle">FinPlan & Otplata</h1>
+                    <p class="text-xs text-slate-500 dark:text-slate-400" data-i18n="appSubtitle">Kalkulator duga & 50/30/20 pravilo</p>
+                </div>
+            </div>
+
+            <!-- Header Action Controls -->
+            <div class="flex items-center flex-wrap gap-2 text-sm">
+                <!-- Language Selector -->
+                <select id="langSelect" onchange="changeLanguage(this.value)" class="bg-slate-800 text-slate-200 border border-slate-700 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-500 text-xs cursor-pointer">
+                    <option value="sr">SR (Srpski)</option>
+                    <option value="en">EN (English)</option>
+                    <option value="de">DE (Deutsch)</option>
+                    <option value="ru">RU (Русский)</option>
+                </select>
+
+                <!-- Background Toggle -->
+                <button onclick="toggleTexture()" title="Promeni stil pozadine" class="bg-slate-800 hover:bg-slate-700 text-slate-200 p-2 rounded-lg border border-slate-700 transition">
+                    <i class="fa-solid fa-border-all"></i>
+                </button>
+
+                <!-- Light/Dark Mode Toggle -->
+                <button onclick="toggleDarkMode()" title="Svetli / Tamni mod" class="bg-slate-800 hover:bg-slate-700 text-amber-400 dark:text-amber-300 p-2 rounded-lg border border-slate-700 transition">
+                    <i class="fa-solid fa-sun dark:hidden"></i>
+                    <i class="fa-solid fa-moon hidden dark:inline"></i>
+                </button>
+
+                <div class="h-5 w-px bg-slate-700 mx-1 hidden sm:block"></div>
+
+                <!-- Saved Plans Modal Button -->
+                <button onclick="openModal('savedPlansModal')" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg border border-slate-700 flex items-center space-x-1.5 transition">
+                    <i class="fa-solid fa-bookmark text-brand-500"></i>
+                    <span class="hidden md:inline" data-i18n="btnSaved">Sačuvani planovi</span>
+                </button>
+
+                <!-- Subscription / Pricing Modal -->
+                <button onclick="openModal('pricingModal')" class="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-semibold px-3 py-1.5 rounded-lg shadow-sm flex items-center space-x-1.5 transition">
+                    <i class="fa-solid fa-crown"></i>
+                    <span class="hidden md:inline" data-i18n="btnSubscription">Pretplata</span>
+                </button>
+
+                <!-- Account Settings -->
+                <button onclick="openModal('accountModal')" class="bg-slate-800 hover:bg-slate-700 text-slate-200 p-2 rounded-lg border border-slate-700 transition" title="Podešavanje naloga">
+                    <i class="fa-solid fa-gear"></i>
+                </button>
+
+                <!-- User Auth Button -->
+                <button onclick="openModal('authModal')" class="bg-brand-600 hover:bg-brand-500 text-white font-medium px-3 py-1.5 rounded-lg shadow-md transition flex items-center space-x-1.5">
+                    <i class="fa-solid fa-user"></i>
+                    <span id="userAuthStatus" data-i18n="btnLogin">Prijava / Registracija</span>
+                </button>
+
+                <!-- Help Button (F1) -->
+                <button onclick="openModal('helpModal')" class="bg-slate-800 hover:bg-slate-700 text-slate-300 p-2 rounded-lg border border-slate-700 transition" title="Pomoć (F1)">
+                    <i class="fa-solid fa-circle-question"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Viewport (Targeted for Zoom scaling) -->
+    <main id="app-viewport" class="flex-grow max-w-7xl w-full mx-auto px-4 py-6 space-y-6">
+
+        <!-- TOP ROW: Inputs and 50/30/20 Overview Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+            <!-- 1. GORNJI LEVI DEO: Unos Prihoda (Lg: 4 cols) -->
+            <div class="lg:col-span-4 bg-slate-900/90 dark:bg-slate-900/90 bg-white/90 backdrop-blur border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col justify-between">
+                <div>
+                    <div class="flex items-center justify-between mb-4 border-b border-slate-200 dark:border-slate-800 pb-3">
+                        <div class="flex items-center space-x-2">
+                            <span class="w-3 h-3 rounded-full bg-emerald-500 inline-block shadow-sm shadow-emerald-500/50"></span>
+                            <h2 class="font-bold text-slate-800 dark:text-slate-100 text-base" data-i18n="incomeTitle">Mesečni Prihodi</h2>
+                        </div>
+                        <span class="text-xs bg-emerald-500/10 text-emerald-500 font-semibold px-2 py-0.5 rounded-full border border-emerald-500/20" id="totalIncomeBadge">0,00 RSD</span>
+                    </div>
+
+                    <!-- Input Form -->
+                    <div class="space-y-3 mb-4">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1" data-i18n="labelIncomeName">Naziv prihoda</label>
+                            <input type="text" id="incName" placeholder="npr. Plata, Priliv od rents" 
+                                class="w-full bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 transition">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1" data-i18n="labelAmount">Iznos (RSD)</label>
+                            <input type="text" id="incAmount" placeholder="125.000,50" 
+                                class="w-full bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 transition">
+                            <p class="text-[10px] text-slate-400 dark:text-slate-500 mt-1" data-i18n="navTip">Navigacija: ENTER za dodavanje, TAB ili NumPad '+' za prelazak</p>
+                        </div>
+                        <button onclick="addIncome()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-2 rounded-xl shadow-md transition flex items-center justify-center space-x-2 text-sm">
+                            <i class="fa-solid fa-plus"></i>
+                            <span data-i18n="btnAddIncome">Dodaj Prihod</span>
+                        </button>
+                    </div>
+
+                    <!-- List of Incomes -->
+                    <div class="space-y-2 max-h-48 overflow-y-auto pr-1" id="incomeList">
+                        <!-- Dynamic items -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. SREDNJI GORNJI DEO: Fiksni Mesečni Troškovi / Dugovanja (Lg: 4 cols) -->
+            <div class="lg:col-span-4 bg-slate-900/90 dark:bg-slate-900/90 bg-white/90 backdrop-blur border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col justify-between">
+                <div>
+                    <div class="flex items-center justify-between mb-4 border-b border-slate-200 dark:border-slate-800 pb-3">
+                        <div class="flex items-center space-x-2">
+                            <span class="w-3 h-3 rounded-full bg-rose-500 inline-block shadow-sm shadow-rose-500/50"></span>
+                            <h2 class="font-bold text-slate-800 dark:text-slate-100 text-base" data-i18n="expenseTitle">Fiksni Troškovi / Dugovi</h2>
+                        </div>
+                        <span class="text-xs bg-rose-500/10 text-rose-500 font-semibold px-2 py-0.5 rounded-full border border-rose-500/20" id="totalExpenseBadge">0,00 RSD</span>
+                    </div>
+
+                    <!-- Input Form -->
+                    <div class="space-y-3 mb-4">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1" data-i18n="labelExpenseName">Naziv obaveze / troška</label>
+                            <input type="text" id="expName" placeholder="npr. Krediti, Kirija, Komunalije" 
+                                class="w-full bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 transition">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1" data-i18n="labelAmount">Iznos (RSD)</label>
+                            <input type="text" id="expAmount" placeholder="35.000,00" 
+                                class="w-full bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 transition">
+                        </div>
+                        <button onclick="addExpense()" class="w-full bg-rose-600 hover:bg-rose-500 text-white font-medium py-2 rounded-xl shadow-md transition flex items-center justify-center space-x-2 text-sm">
+                            <i class="fa-solid fa-plus"></i>
+                            <span data-i18n="btnAddExpense">Dodaj Trošak</span>
+                        </button>
+                    </div>
+
+                    <!-- List of Expenses -->
+                    <div class="space-y-2 max-h-48 overflow-y-auto pr-1" id="expenseList">
+                        <!-- Dynamic items -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. GORNJI DESNI DEO: 50/30/20 Plan & Pravilo (Lg: 4 cols) -->
+            <div class="lg:col-span-4 bg-slate-900/90 dark:bg-slate-900/90 bg-white/90 backdrop-blur border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col justify-between">
+                <div>
+                    <div class="flex items-center justify-between mb-4 border-b border-slate-200 dark:border-slate-800 pb-3">
+                        <div class="flex items-center space-x-2">
+                            <i class="fa-solid fa-chart-pie text-amber-500"></i>
+                            <h2 class="font-bold text-slate-800 dark:text-slate-100 text-base" data-i18n="ruleTitle">50 / 30 / 20 Pravilo</h2>
+                        </div>
+                        <span class="text-xs text-slate-400" data-i18n="ruleSubtitle">Preporučeni raspon</span>
+                    </div>
+
+                    <!-- Free budget indicator -->
+                    <div class="mb-4 bg-slate-800/50 p-3 rounded-xl border border-slate-700/50 flex items-center justify-between">
+                        <span class="text-xs text-slate-400" data-i18n="freeNet">Slobodna sredstva:</span>
+                        <span id="freeNetValue" class="text-sm font-bold text-brand-500">0,00 RSD</span>
+                    </div>
+
+                    <!-- 50% Needs -->
+                    <div class="space-y-3">
+                        <div>
+                            <div class="flex justify-between text-xs mb-1">
+                                <span class="text-slate-400" data-i18n="rule50">50% Potrebe (Fiksno):</span>
+                                <span id="rule50Val" class="font-semibold text-sky-400">0,00 RSD</span>
+                            </div>
+                            <div class="w-full bg-slate-800 rounded-full h-2">
+                                <div id="rule50Bar" class="bg-sky-500 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                            </div>
+                        </div>
+
+                        <!-- 30% Wants -->
+                        <div>
+                            <div class="flex justify-between text-xs mb-1">
+                                <span class="text-slate-400" data-i18n="rule30">30% Želje & Stil života:</span>
+                                <span id="rule30Val" class="font-semibold text-purple-400">0,00 RSD</span>
+                            </div>
+                            <div class="w-full bg-slate-800 rounded-full h-2">
+                                <div id="rule30Bar" class="bg-purple-500 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                            </div>
+                        </div>
+
+                        <!-- 20% Savings/Debt -->
+                        <div>
+                            <div class="flex justify-between text-xs mb-1">
+                                <span class="text-slate-400" data-i18n="rule20">20% Štednja / Otplata duga:</span>
+                                <span id="rule20Val" class="font-semibold text-emerald-400">0,00 RSD</span>
+                            </div>
+                            <div class="w-full bg-slate-800 rounded-full h-2">
+                                <div id="rule20Bar" class="bg-emerald-500 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <p class="text-[11px] text-slate-400 dark:text-slate-500 mt-4 leading-relaxed" data-i18n="ruleDesc">
+                        * Pravilo raspoređuje ukupne prihode na osnove, želje i bržu otplatu dugova/štednju.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- MIDDLE ROW: Visual Double Donut Chart & Debt Settings -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+            <!-- Dynamic Chart Visualization (Lg: 6 cols) -->
+            <div class="lg:col-span-6 bg-slate-900/90 dark:bg-slate-900/90 bg-white/90 backdrop-blur border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col items-center justify-between">
+                <div class="w-full flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2">
+                    <div class="flex items-center space-x-2">
+                        <i class="fa-solid fa-chart-donut text-brand-500"></i>
+                        <h3 class="font-bold text-slate-800 dark:text-slate-100 text-sm" data-i18n="chartTitle">Struktura Prihoda vs Troškova</h3>
+                    </div>
+                    <span class="text-[11px] text-slate-400" data-i18n="chartSubtitle">Unutrašnji: Prihodi | Spoljašnji: Troškovi</span>
+                </div>
+                
+                <!-- Chart Container with Inner Overlay Text -->
+                <div class="relative w-full max-w-xs aspect-square flex items-center justify-center py-4">
+                    <canvas id="financialChart"></canvas>
+                    
+                    <!-- Nested Center Content Overlay -->
+                    <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center">
+                        <span class="text-[10px] uppercase font-bold tracking-wider text-slate-400" data-i18n="chartCenterLabel">Neto Saldo</span>
+                        <span id="chartCenterValue" class="text-base font-extrabold text-emerald-400 drop-shadow">0,00 RSD</span>
+                    </div>
+                </div>
+
+                <!-- Modern Chart Custom Legend -->
+                <div class="w-full flex items-center justify-center space-x-4 pt-2 text-xs text-slate-400">
+                    <div class="flex items-center space-x-1.5">
+                        <span class="w-3 h-3 rounded-full bg-emerald-500"></span>
+                        <span>Prihodi (Unutrašnji)</span>
+                    </div>
+                    <div class="flex items-center space-x-1.5">
+                        <span class="w-3 h-3 rounded-full bg-rose-500"></span>
+                        <span>Rashodi (Spoljašnji)</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Total Debt & Repayment Setup (Lg: 6 cols) -->
+            <div class="lg:col-span-6 bg-slate-900/90 dark:bg-slate-900/90 bg-white/90 backdrop-blur border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col justify-between">
+                <div>
+                    <div class="flex items-center justify-between mb-4 border-b border-slate-200 dark:border-slate-800 pb-3">
+                        <div class="flex items-center space-x-2">
+                            <i class="fa-solid fa-calculator text-brand-500"></i>
+                            <h2 class="font-bold text-slate-800 dark:text-slate-100 text-base" data-i18n="debtCalcTitle">Planer Otplate Dugovanja</h2>
+                        </div>
+                    </div>
+
+                    <!-- Total Debt Input -->
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1" data-i18n="labelTotalDebt">Ukupno dugovanje za otplatu (RSD)</label>
+                            <input type="text" id="totalDebtInput" placeholder="npr. 500.000,00" value="300.000,00" oninput="updateCalculations()"
+                                class="w-full bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-100 font-bold border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-brand-500 transition">
+                        </div>
+
+                        <!-- Months Slider -->
+                        <div>
+                            <div class="flex justify-between items-center mb-1">
+                                <label class="text-xs font-medium text-slate-500 dark:text-slate-400" data-i18n="labelTargetMonths">Željeni rok otplate (meseci):</label>
+                                <span id="monthsDisplay" class="font-bold text-brand-500 text-base">12 meseci</span>
+                            </div>
+                            <input type="range" id="monthsSlider" min="1" max="120" value="12" oninput="updateSliderCalculations()" 
+                                class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-brand-500">
+                            <div class="flex justify-between text-[10px] text-slate-500 mt-1">
+                                <span>1 mesec</span>
+                                <span>60 meseci (5 g)</span>
+                                <span>120 meseci (10 g)</span>
+                            </div>
+                        </div>
+
+                        <!-- Stats Quick Display -->
+                        <div class="grid grid-cols-2 gap-3 pt-2">
+                            <div class="bg-slate-800/60 p-3 rounded-xl border border-slate-700/50">
+                                <p class="text-[11px] text-slate-400" data-i18n="statCurrentCapacity">Trenutni višak/mesec:</p>
+                                <p class="text-sm font-bold text-emerald-400" id="statMonthlySurplus">0,00 RSD</p>
+                            </div>
+                            <div class="bg-slate-800/60 p-3 rounded-xl border border-slate-700/50">
+                                <p class="text-[11px] text-slate-400" data-i18n="statRequiredRate">Potrebna rata za rok:</p>
+                                <p class="text-sm font-bold text-amber-400" id="statRequiredPayment">0,00 RSD</p>
+                            </div>
+                        </div>
+
+                        <!-- Estimated Time readout -->
+                        <div class="bg-slate-800/80 p-3 rounded-xl border border-brand-500/30 flex items-center justify-between">
+                            <span class="text-xs text-slate-300 font-medium" data-i18n="estimatedTimeLabel">Procena sa trenutnim primanjima:</span>
+                            <span id="estimatedTimeResult" class="text-xs font-bold text-brand-400 bg-brand-500/10 px-2.5 py-1 rounded-full">0 meseci</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Export & Save Controls -->
+                <div class="flex items-center space-x-3 mt-6 no-print">
+                    <button onclick="saveCurrentPlan()" class="flex-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 py-2.5 rounded-xl font-medium text-xs transition flex items-center justify-center space-x-2">
+                        <i class="fa-solid fa-floppy-disk text-brand-500"></i>
+                        <span data-i18n="btnSavePlan">Sačuvaj Plan</span>
+                    </button>
+                    <button onclick="exportToPDF()" class="flex-1 bg-brand-600 hover:bg-brand-500 text-white py-2.5 rounded-xl font-medium text-xs shadow-md transition flex items-center justify-center space-x-2">
+                        <i class="fa-solid fa-file-pdf"></i>
+                        <span data-i18n="btnExportPDF">Izradi PDF</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- BOTTOM ROW: Comprehensive Repayment Amortization Table -->
+        <div class="bg-slate-900/90 dark:bg-slate-900/90 bg-white/90 backdrop-blur border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xl">
+            <div class="flex flex-wrap items-center justify-between mb-4 border-b border-slate-200 dark:border-slate-800 pb-3 gap-2">
+                <div>
+                    <h3 class="font-bold text-slate-800 dark:text-slate-100 text-base" data-i18n="tableTitle">Projekcija i Tabela Otplate</h3>
+                    <p class="text-xs text-slate-400" data-i18n="tableSubtitle">Detaljan prikaz po mesecima na osnovu izabranog roka ili slobodnog budžeta</p>
+                </div>
+            </div>
+
+            <!-- Table Container -->
+            <div class="overflow-x-auto max-h-72">
+                <table class="w-full text-left border-collapse text-xs">
+                    <thead>
+                        <tr class="bg-slate-800/80 text-slate-300 border-b border-slate-700">
+                            <th class="p-3 font-semibold" data-i18n="thMonth">Mesec</th>
+                            <th class="p-3 font-semibold" data-i18n="thStartBalance">Početno Dugovanje</th>
+                            <th class="p-3 font-semibold" data-i18n="thPayment">Uplata / Rata</th>
+                            <th class="p-3 font-semibold" data-i18n="thEndBalance">Preostali Dug</th>
+                            <th class="p-3 font-semibold" data-i18n="thStatus">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="repaymentTableBody" class="divide-y divide-slate-800 text-slate-300">
+                        <!-- Dynamic rows -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- FOOTER & Controls (Zoom slider in bottom right) -->
+    <footer class="no-print bg-slate-900 border-t border-slate-800 px-4 py-3 text-slate-400 text-xs mt-auto">
+        <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-3">
+            <div>
+                <span>&copy; 2026 FinPlan Planner. Sva prava zadržana.</span>
+            </div>
+
+            <!-- Zoom Controller (Bottom Right) -->
+            <div class="flex items-center space-x-3 bg-slate-800/80 px-3 py-1.5 rounded-full border border-slate-700">
+                <i class="fa-solid fa-magnifying-glass-minus text-slate-400"></i>
+                <input type="range" id="zoomSlider" min="70" max="130" value="100" oninput="adjustZoom(this.value)" class="w-24 h-1.5 bg-slate-600 rounded-lg appearance-none cursor-pointer accent-brand-500">
+                <i class="fa-solid fa-magnifying-glass-plus text-slate-400"></i>
+                <span id="zoomValue" class="font-mono text-[11px] text-slate-200">100%</span>
+            </div>
+        </div>
+    </footer>
+
+    <!-- MODALS SECTION -->
+
+    <!-- EDIT ITEM MODAL -->
+    <div id="editItemModal" class="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl relative">
+            <button onclick="closeModal('editItemModal')" class="absolute top-4 right-4 text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+            <h3 class="text-lg font-bold text-white mb-4" id="editModalHeader">Izmena Stavke</h3>
+            <div class="space-y-4">
+                <input type="hidden" id="editItemId">
+                <input type="hidden" id="editItemType">
+                <div>
+                    <label class="block text-xs font-medium text-slate-400 mb-1">Naziv stavke</label>
+                    <input type="text" id="editItemName" class="w-full bg-slate-800 text-white border border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-400 mb-1">Iznos (RSD)</label>
+                    <input type="text" id="editItemAmount" class="w-full bg-slate-800 text-white border border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+                </div>
+                <button onclick="saveItemEdit()" class="w-full bg-brand-600 hover:bg-brand-500 text-white font-medium py-2 rounded-xl transition shadow-md">Sačuvaj izmene</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- AUTH MODAL -->
+    <div id="authModal" class="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl relative">
+            <button onclick="closeModal('authModal')" class="absolute top-4 right-4 text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+            <h3 class="text-lg font-bold text-white mb-4" data-i18n="authHeader">Prijava na Nalog</h3>
+            <form onsubmit="handleAuth(event)" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-medium text-slate-400 mb-1" data-i18n="labelEmail">Email adresa</label>
+                    <input type="email" required class="w-full bg-slate-800 text-white border border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-400 mb-1" data-i18n="labelPassword">Lozinka</label>
+                    <input type="password" required class="w-full bg-slate-800 text-white border border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+                </div>
+                <button type="submit" class="w-full bg-brand-600 hover:bg-brand-500 text-white font-medium py-2 rounded-xl transition shadow-md" data-i18n="btnLoginSubmit">Prijavi se</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- SAVED PLANS MODAL -->
+    <div id="savedPlansModal" class="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl relative">
+            <button onclick="closeModal('savedPlansModal')" class="absolute top-4 right-4 text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+            <h3 class="text-lg font-bold text-white mb-4" data-i18n="savedPlansHeader">Sačuvani Budžetski Planovi</h3>
+            <div id="savedPlansList" class="space-y-3 max-h-60 overflow-y-auto">
+                <!-- Dynamic plans -->
+            </div>
+        </div>
+    </div>
+
+    <!-- PRICING MODAL -->
+    <div id="pricingModal" class="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-xl w-full p-6 shadow-2xl relative">
+            <button onclick="closeModal('pricingModal')" class="absolute top-4 right-4 text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+            <h3 class="text-xl font-bold text-white text-center mb-2" data-i18n="subTitle">Izaberite Pretplatu</h3>
+            <p class="text-xs text-slate-400 text-center mb-6" data-i18n="subDesc">Otključajte sve napredne analitike i neograničeno čuvanje planova.</p>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="bg-slate-800/80 p-4 rounded-xl border border-slate-700 text-center flex flex-col justify-between">
+                    <div>
+                        <h4 class="font-bold text-white mb-1" data-i18n="subMonthly">Mesečni Paket</h4>
+                        <p class="text-2xl font-extrabold text-brand-500 my-2">490 RSD <span class="text-xs text-slate-400 font-normal">/ mesec</span></p>
+                    </div>
+                    <button onclick="selectPlan('Monthly')" class="w-full mt-4 bg-slate-700 hover:bg-slate-600 text-white font-medium py-2 rounded-lg text-xs transition" data-i18n="btnSelect">Izaberi</button>
+                </div>
+                <div class="bg-slate-800/80 p-4 rounded-xl border border-amber-500/50 text-center flex flex-col justify-between relative">
+                    <span class="absolute -top-2.5 right-4 bg-amber-500 text-slate-950 text-[10px] font-bold px-2 py-0.5 rounded-full">Najpopularnije</span>
+                    <div>
+                        <h4 class="font-bold text-white mb-1" data-i18n="subYearly">Godišnji Paket</h4>
+                        <p class="text-2xl font-extrabold text-amber-400 my-2">4.490 RSD <span class="text-xs text-slate-400 font-normal">/ godina</span></p>
+                    </div>
+                    <button onclick="selectPlan('Yearly')" class="w-full mt-4 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold py-2 rounded-lg text-xs transition" data-i18n="btnSelect">Izaberi</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ACCOUNT SETTINGS MODAL -->
+    <div id="accountModal" class="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl relative">
+            <button onclick="closeModal('accountModal')" class="absolute top-4 right-4 text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+            <h3 class="text-lg font-bold text-white mb-4" data-i18n="accountHeader">Podešavanja Naloga</h3>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-medium text-slate-400 mb-1" data-i18n="labelFullName">Ime i Prezime</label>
+                    <input type="text" id="accFullName" value="Marko Petrović" class="w-full bg-slate-800 text-white border border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-400 mb-1" data-i18n="labelCard">Platna Kartica</label>
+                    <div class="flex space-x-2">
+                        <input type="text" placeholder="**** **** **** 1234" class="w-full bg-slate-800 text-white border border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none">
+                        <button onclick="alert('Kartica sačuvana!')" class="bg-slate-800 hover:bg-slate-700 text-brand-500 px-3 py-2 border border-slate-700 rounded-xl text-xs">Dodaj</button>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-400 mb-1" data-i18n="labelNewPass">Nova Lozinka</label>
+                    <input type="password" placeholder="••••••••" class="w-full bg-slate-800 text-white border border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+                </div>
+                <button onclick="closeModal('accountModal')" class="w-full bg-brand-600 hover:bg-brand-500 text-white font-medium py-2 rounded-xl transition" data-i18n="btnSaveAcc">Sačuvaj izmene</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- HELP MODAL (F1) -->
+    <div id="helpModal" class="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl relative">
+            <button onclick="closeModal('helpModal')" class="absolute top-4 right-4 text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+            <h3 class="text-lg font-bold text-white mb-3" data-i18n="helpHeader">Pomoć i Uputstvo za Korišćenje</h3>
+            <div class="space-y-3 text-xs text-slate-300 leading-relaxed max-h-80 overflow-y-auto pr-2">
+                <p><strong>1. Unos, Izmena i Brisanje:</strong> Unesite naziv i iznos u srpskom formatu. Pritisnite <code>ENTER</code> za dodavanje. Uz svaku unetu stavku možete kliknuti na ikonicu olovke za izmenu ili kantice za brisanje.</p>
+                <p><strong>2. 50/30/20 Pravilo:</strong> Aplikacija automatski raspoređuje vaša ukupna primanja na preporučene kategorije: 50% za fiksne potrebe, 30% za lične želje i 20% za štednju ili otplatu duga.</p>
+                <p><strong>3. Modernizovani Donut Grafikon:</strong> Unutrašnji prsten prikazuje strukturu prihoda, dok spoljašnji prsten predstavlja strukturu troškova. Središte grafikona dinamčki izračunava i prikazuje trenutni neto saldo.</p>
+                <p><strong>4. Plan otplate duga:</strong> Unesite ukupan iznos dugovanja. Aplikacija izračunava koliko meseci je potrebno da se dug u potpunosti otplati na osnovu trenutnog slobodnog budžeta (viška).</p>
+                <p><strong>5. Prečica F1:</strong> U bilo kom trenutku pritisnite <code>F1</code> na tastaturi da otvorite ovaj prozor za pomoć.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- JAVASCRIPT APP LOGIC & FIREBASE CONFIG -->
+    <script>
+        // === FIREBASE INICIJALIZACIJA ===
+        const firebaseConfig = {
+            apiKey: "AIzaSyCtK7RUxAF3NHQe4mubJyMxLuNuuRQG7Rg",
+            authDomain: "finplan-3c67a.firebaseapp.com",
+            databaseURL: "https://finplan-3c67a-default-rtdb.europe-west1.firebasedatabase.app",
+            projectId: "finplan-3c67a",
+            storageBucket: "finplan-3c67a.firebasestorage.app",
+            messagingSenderId: "831841229789",
+            appId: "1:831841229789:web:52bc518cfb7a872736b434"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+        const auth = firebase.auth();
+
+        // Data State
+        let incomes = [
+            { id: 1, name: 'Plata', amount: 120000.00, color: '#10b981' },
+            { id: 2, name: 'Honorarni rad', amount: 25000.00, color: '#06b6d4' }
+        ];
+
+        let expenses = [
+            { id: 1, name: 'Stambeni kredit', amount: 35000.00, color: '#f43f5e' },
+            { id: 2, name: 'Komunalije', amount: 12000.00, color: '#f59e0b' },
+            { id: 3, name: 'Hrana i potrepštine', amount: 30000.00, color: '#a855f7' }
+        ];
+
+        let savedPlans = [];
+        let financialChart = null;
+        let currentLang = 'sr';
+
+        // Vibrant Palette colors for dynamic allocation
+        const itemColors = ['#10b981', '#06b6d4', '#3b82f6', '#6366f1', '#a855f7', '#ec4899', '#f43f5e', '#f59e0b', '#84cc16'];
+
+        // i18n Translations
+        const translations = {
+            sr: {
+                appTitle: "FinPlan",
+                appSubtitle: "KALKULATOR",
+                btnSaved: "Sačuvani planovi",
+                btnSubscription: "Pretplata",
+                btnLogin: "Prijava / Registracija",
+                incomeTitle: "Mesečni Prihodi",
+                labelIncomeName: "Naziv prihoda",
+                labelAmount: "Iznos (RSD)",
+                navTip: "Navigacija: ENTER za dodavanje, TAB ili NumPad '+' za prelazak",
+                btnAddIncome: "Dodaj Prihod",
+                expenseTitle: "Fiksni Troškovi / Dugovi",
+                labelExpenseName: "Naziv troškova",
+                btnAddExpense: "Dodaj Trošak",
+                ruleTitle: "50 / 30 / 20 Pravilo",
+                ruleSubtitle: "Preporučeni raspon",
+                freeNet: "Slobodna sredstva:",
+                rule50: "50% Potrebe (Fiksno):",
+                rule30: "30% Želje & Stil života:",
+                rule20: "20% Štednja / Otplata duga:",
+                ruleDesc: "* Pravilo raspoređuje ukupne prihode na osnove, želje i bržu otplatu dugova/štednju.",
+                chartTitle: "Struktura Prihoda vs Troškova",
+                chartSubtitle: "Unutrašnji: Troškovi | Spoljašnji: Prihodi",
+                debtCalcTitle: "Planer Otplate Dugovanja",
+                labelTotalDebt: "Ukupno dugovanje za otplatu (RSD)",
+                labelTargetMonths: "Željeni rok otplate (meseci):",
+                statCurrentCapacity: "Trenutni višak/mesec:",
+                statRequiredRate: "Potrebna rata za rok:",
+                estimatedTimeLabel: "Procena sa trenutnim primanjima:",
+                btnSavePlan: "Sačuvaj Plan",
+                btnExportPDF: "Izradi PDF",
+                tableTitle: "Projekcija i Tabela Otplate",
+                tableSubtitle: "Detaljan prikaz po mesecima na osnovu izabranog roka ili slobodnog budžeta",
+                thMonth: "Mesec",
+                thStartBalance: "Početno Dugovanje",
+                thPayment: "Uplata / Rata",
+                thEndBalance: "Preostali Dug",
+                thStatus: "Status",
+                authHeader: "Prijava na Nalog",
+                labelEmail: "Email adresa",
+                labelPassword: "Lozinka",
+                btnLoginSubmit: "Prijavi se",
+                savedPlansHeader: "Sačuvani Budžetski Planovi",
+                subTitle: "Izaberite Pretplatu",
+                subDesc: "Otključajte sve napredne analitike i neograničeno čuvanje planova.",
+                subMonthly: "Mesečni Paket",
+                subYearly: "Godišnji Paket",
+                btnSelect: "Izaberi",
+                accountHeader: "Podešavanja Naloga",
+                labelFullName: "Ime i Prezime",
+                labelCard: "Platna Kartica",
+                labelNewPass: "Nova Lozinka",
+                btnSaveAcc: "Sačuvaj izmene",
+                helpHeader: "Pomoć i Uputstvo za Korišćenje",
+                chartCenterLabel: "Neto Saldo"
+            },
+            en: {
+                appTitle: "FinPlan & Repayment",
+                appSubtitle: "Debt calculator & 50/30/20 rule",
+                btnSaved: "Saved Plans",
+                btnSubscription: "Subscription",
+                btnLogin: "Login / Signup",
+                incomeTitle: "Monthly Income",
+                labelIncomeName: "Income source",
+                labelAmount: "Amount (RSD)",
+                navTip: "Navigation: ENTER to add, TAB or NumPad '+' to switch",
+                btnAddIncome: "Add Income",
+                expenseTitle: "Fixed Expenses / Debts",
+                labelExpenseName: "Expense / Obligation name",
+                btnAddExpense: "Add Expense",
+                ruleTitle: "50 / 30 / 20 Rule",
+                ruleSubtitle: "Recommended split",
+                freeNet: "Available net budget:",
+                rule50: "50% Needs (Fixed):",
+                rule30: "30% Wants & Lifestyle:",
+                rule20: "20% Savings / Debt paydown:",
+                ruleDesc: "* Rule allocates total income into essentials, lifestyle and accelerated debt payoff.",
+                chartTitle: "Income vs Expense Structure",
+                chartSubtitle: "Inner: Income | Outer: Expenses",
+                debtCalcTitle: "Debt Repayment Planner",
+                labelTotalDebt: "Total debt balance to payoff (RSD)",
+                labelTargetMonths: "Target payoff period (months):",
+                statCurrentCapacity: "Current monthly surplus:",
+                statRequiredRate: "Required payment for target:",
+                estimatedTimeLabel: "Estimated time with current income:",
+                btnSavePlan: "Save Plan",
+                btnExportPDF: "Export PDF",
+                tableTitle: "Repayment Schedule & Projection",
+                tableSubtitle: "Detailed monthly breakdown based on target timeframe or free budget",
+                thMonth: "Month",
+                thStartBalance: "Starting Balance",
+                thPayment: "Payment / Rate",
+                thEndBalance: "Remaining Debt",
+                thStatus: "Status",
+                authHeader: "Account Login",
+                labelEmail: "Email address",
+                labelPassword: "Password",
+                btnLoginSubmit: "Log In",
+                savedPlansHeader: "Saved Budget Plans",
+                subTitle: "Choose a Subscription",
+                subDesc: "Unlock advanced analytics and unlimited plan saving.",
+                subMonthly: "Monthly Plan",
+                subYearly: "Yearly Plan",
+                btnSelect: "Select",
+                accountHeader: "Account Settings",
+                labelFullName: "Full Name",
+                labelCard: "Credit Card",
+                labelNewPass: "New Password",
+                btnSaveAcc: "Save Changes",
+                helpHeader: "Help & Usage Guide",
+                chartCenterLabel: "Net Balance"
+            },
+            de: {
+                appTitle: "FinPlan & Tilgung",
+                appSubtitle: "Schuldenrechner & 50/30/20 Regel",
+                btnSaved: "Gespeicherte Pläne",
+                btnSubscription: "Abonnement",
+                btnLogin: "Anmelden / Registrieren",
+                incomeTitle: "Monatliches Einkommen",
+                labelIncomeName: "Einkommensquelle",
+                labelAmount: "Betrag (RSD)",
+                navTip: "Navigation: ENTER zum Hinzufügen, TAB oder NumPad '+' zum Wechseln",
+                btnAddIncome: "Einkommen Hinzufügen",
+                expenseTitle: "Fixkosten / Schulden",
+                labelExpenseName: "Ausgabenbezeichnung",
+                btnAddExpense: "Ausgabe Hinzufügen",
+                ruleTitle: "50 / 30 / 20 Regel",
+                ruleSubtitle: "Empfohlene Aufteilung",
+                freeNet: "Freies Netto-Budget:",
+                rule50: "50% Bedürfnisse (Fix):",
+                rule30: "30% Wünsche & Lifestyle:",
+                rule20: "20% Sparen / Schuldentilgung:",
+                ruleDesc: "* Regel teilt das Gesamteinkommen in Grundbedarf, Wünsche und Schuldentilgung auf.",
+                chartTitle: "Einnahmen vs. Ausgaben Struktur",
+                chartSubtitle: "Innen: Einnahmen | Außen: Ausgaben",
+                debtCalcTitle: "Schuldentilgungsplaner",
+                labelTotalDebt: "Gesamtschuldenstand (RSD)",
+                labelTargetMonths: "Ziel-Tilgungsdauer (Monate):",
+                statCurrentCapacity: "Aktueller monatlicher Überschuss:",
+                statRequiredRate: "Erforderliche Rate für Ziel:",
+                estimatedTimeLabel: "Schätzung mit aktuellem Einkommen:",
+                btnSavePlan: "Plan Speichern",
+                btnExportPDF: "PDF Erstellen",
+                tableTitle: "Tilgungsplan & Projektion",
+                tableSubtitle: "Detaillierte monatliche Aufschlüsselung basierend auf Zielzeitraum",
+                thMonth: "Monat",
+                thStartBalance: "Anfangsbestand",
+                thPayment: "Zahlung / Rate",
+                thEndBalance: "Restschuld",
+                thStatus: "Status",
+                authHeader: "Konto-Anmeldung",
+                labelEmail: "E-Mail-Adresse",
+                labelPassword: "Passwort",
+                btnLoginSubmit: "Anmelden",
+                savedPlansHeader: "Gespeicherte Budgetpläne",
+                subTitle: "Wählen Sie ein Abonnement",
+                subDesc: "Freischalten erweiterter Analysen und unbegrenztes Speichern.",
+                subMonthly: "Monatlicher Paket",
+                subYearly: "Jahrespaket",
+                btnSelect: "Auswählen",
+                accountHeader: "Kontoeinstellungen",
+                labelFullName: "Vollständiger Name",
+                labelCard: "Kreditkarte",
+                labelNewPass: "Neues Passwort",
+                btnSaveAcc: "Änderungen Speichern",
+                helpHeader: "Hilfe & Anleitung",
+                chartCenterLabel: "Netto-Saldo"
+            },
+            ru: {
+                appTitle: "FinPlan & Погашение",
+                appSubtitle: "Калькулятор долга и правило 50/30/20",
+                btnSaved: "Сохраненные планы",
+                btnSubscription: "Подписка",
+                btnLogin: "Вход / Регистрация",
+                incomeTitle: "Ежемесячный доход",
+                labelIncomeName: "Источник дохода",
+                labelAmount: "Сумма (RSD)",
+                navTip: "Навигация: ENTER для добавления, TAB или NumPad '+' для перехода",
+                btnAddIncome: "Добавить доход",
+                expenseTitle: "Фиксированные расходы / Долги",
+                labelExpenseName: "Название расхода",
+                btnAddExpense: "Добавить расход",
+                ruleTitle: "Правило 50 / 30 / 20",
+                ruleSubtitle: "Рекомендуемое распределение",
+                freeNet: "Свободный бюджет:",
+                rule50: "50% Потребности (Фикс):",
+                rule30: "30% Желания и стиль жизни:",
+                rule20: "20% Сбережения / Погашение:",
+                ruleDesc: "* Правило распределяет доход на основные нужды, желания и погашение долгов.",
+                chartTitle: "Структура доходов и расходов",
+                chartSubtitle: "Внутри: Доходы | Снаружи: Расходы",
+                debtCalcTitle: "Планировщик погашения долга",
+                labelTotalDebt: "Общая сумма долга (RSD)",
+                labelTargetMonths: "Желаемый срок (месяцев):",
+                statCurrentCapacity: "Текущий излишек/месяц:",
+                statRequiredRate: "Требуемый платеж:",
+                estimatedTimeLabel: "Оценка с текущими доходами:",
+                btnSavePlan: "Сохранить план",
+                btnExportPDF: "Создать PDF",
+                tableTitle: "График и проекция погашения",
+                tableSubtitle: "Ежемесячный детализированный расчет",
+                thMonth: "Месяц",
+                thStartBalance: "Начальный остаток",
+                thPayment: "Платеж / Взнос",
+                thEndBalance: "Остаток долга",
+                thStatus: "Статус",
+                authHeader: "Вход в аккаунт",
+                labelEmail: "Электронная почта",
+                labelPassword: "Пароль",
+                btnLoginSubmit: "Войти",
+                savedPlansHeader: "Сохраненные бюджетные планы",
+                subTitle: "Выберите подписку",
+                subDesc: "Разблокируйте расширенную аналитику и неограниченные планы.",
+                subMonthly: "Ежемесячный план",
+                subYearly: "Годовой план",
+                btnSelect: "Выбрать",
+                accountHeader: "Настройки аккаунта",
+                labelFullName: "Имя и фамилия",
+                labelCard: "Банковская карта",
+                labelNewPass: "Новый пароль",
+                btnSaveAcc: "Сохранить изменения",
+                helpHeader: "Помощь и руководство",
+                chartCenterLabel: "Чистый Баланс"
+            }
+        };
+
+        // --- Init Functionality ---
+        window.onload = function() {
+            setupNavigationHandlers();
+            initChart();
+            updateCalculations();
+            
+            // F1 Keyboard Shortcut for Help Modal
+            window.addEventListener('keydown', function(e) {
+                if (e.key === 'F1') {
+                    e.preventDefault();
+                    openModal('helpModal');
+                }
+            });
+        };
+
+        // Serbian Decimal Parsing (e.g., 1.250,50 -> 1250.50)
+        function parseSerbianDecimal(valStr) {
+            if (!valStr) return 0;
+            let sanitized = valStr.toString().trim().replace(/\./g, '').replace(',', '.');
+            let parsed = parseFloat(sanitized);
+            return isNaN(parsed) ? 0 : parsed;
+        }
+
+        // Format to Serbian Currency String (1250.5 -> "1.250,50")
+        function formatSerbianDecimal(num) {
+            return num.toLocaleString('sr-RS', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        // --- Keyboard Navigation Requirements ---
+        function setupNavigationHandlers() {
+            // Income inputs
+            const incName = document.getElementById('incName');
+            const incAmount = document.getElementById('incAmount');
+
+            incName.addEventListener('keydown', function(e) {
+                if (e.key === '+' || e.code === 'NumpadAdd' || e.key === 'Tab') {
+                    e.preventDefault();
+                    incAmount.focus();
+                } else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addIncome();
+                }
+            });
+
+            incAmount.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addIncome();
+                }
+            });
+
+            // Expense inputs
+            const expName = document.getElementById('expName');
+            const expAmount = document.getElementById('expAmount');
+
+            expName.addEventListener('keydown', function(e) {
+                if (e.key === '+' || e.code === 'NumpadAdd' || e.key === 'Tab') {
+                    e.preventDefault();
+                    expAmount.focus();
+                } else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addExpense();
+                }
+            });
+
+            expAmount.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addExpense();
+                }
+            });
+        }
+
+        // Add Income Entry
+        function addIncome() {
+            const nameEl = document.getElementById('incName');
+            const amtEl = document.getElementById('incAmount');
+            const name = nameEl.value.trim();
+            const amt = parseSerbianDecimal(amtEl.value);
+
+            if (!name || amt <= 0) return;
+
+            const color = itemColors[incomes.length % itemColors.length];
+            incomes.push({ id: Date.now(), name, amount: amt, color });
+
+            nameEl.value = '';
+            amtEl.value = '';
+            nameEl.focus(); // Automatic pointer return
+
+            updateCalculations();
+        }
+
+        // Add Expense Entry
+        function addExpense() {
+            const nameEl = document.getElementById('expName');
+            const amtEl = document.getElementById('expAmount');
+            const name = nameEl.value.trim();
+            const amt = parseSerbianDecimal(amtEl.value);
+
+            if (!name || amt <= 0) return;
+
+            const color = itemColors[(expenses.length + 3) % itemColors.length];
+            expenses.push({ id: Date.now(), name, amount: amt, color });
+
+            nameEl.value = '';
+            amtEl.value = '';
+            nameEl.focus(); // Automatic pointer return
+
+            updateCalculations();
+        }
+
+        // --- EDIT & DELETE FUNCTIONALITY ---
+        function removeIncome(id) {
+            incomes = incomes.filter(i => i.id !== id);
+            updateCalculations();
+        }
+
+        function removeExpense(id) {
+            expenses = expenses.filter(e => e.id !== id);
+            updateCalculations();
+        }
+
+        function openEditModal(type, id) {
+            let item = null;
+            if (type === 'income') {
+                item = incomes.find(i => i.id === id);
+                document.getElementById('editModalHeader').innerText = "Izmena Prihoda";
+            } else {
+                item = expenses.find(e => e.id === id);
+                document.getElementById('editModalHeader').innerText = "Izmena Troška / Duga";
+            }
+
+            if (!item) return;
+
+            document.getElementById('editItemId').value = item.id;
+            document.getElementById('editItemType').value = type;
+            document.getElementById('editItemName').value = item.name;
+            document.getElementById('editItemAmount').value = formatSerbianDecimal(item.amount);
+
+            openModal('editItemModal');
+        }
+
+        function saveItemEdit() {
+            const id = parseInt(document.getElementById('editItemId').value);
+            const type = document.getElementById('editItemType').value;
+            const newName = document.getElementById('editItemName').value.trim();
+            const newAmt = parseSerbianDecimal(document.getElementById('editItemAmount').value);
+
+            if (!newName || newAmt <= 0) return;
+
+            if (type === 'income') {
+                const item = incomes.find(i => i.id === id);
+                if (item) {
+                    item.name = newName;
+                    item.amount = newAmt;
+                }
+            } else {
+                const item = expenses.find(e => e.id === id);
+                if (item) {
+                    item.name = newName;
+                    item.amount = newAmt;
+                }
+            }
+
+            closeModal('editItemModal');
+            updateCalculations();
+        }
+
+        // Main Calculation Controller
+        function updateCalculations() {
+            const totalInc = incomes.reduce((sum, i) => sum + i.amount, 0);
+            const totalExp = expenses.reduce((sum, e) => sum + e.amount, 0);
+            const netSurplus = Math.max(0, totalInc - totalExp);
+
+            // Badges Update
+            document.getElementById('totalIncomeBadge').innerText = formatSerbianDecimal(totalInc) + ' RSD';
+            document.getElementById('totalExpenseBadge').innerText = formatSerbianDecimal(totalExp) + ' RSD';
+            document.getElementById('freeNetValue').innerText = formatSerbianDecimal(netSurplus) + ' RSD';
+            document.getElementById('statMonthlySurplus').innerText = formatSerbianDecimal(netSurplus) + ' RSD';
+            
+            // Center Chart Overlay update
+            const centerVal = document.getElementById('chartCenterValue');
+            if (centerVal) {
+                centerVal.innerText = formatSerbianDecimal(netSurplus) + ' RSD';
+                if (netSurplus <= 0 && totalInc < totalExp) {
+                    centerVal.className = "text-base font-extrabold text-rose-500 drop-shadow";
+                } else {
+                    centerVal.className = "text-base font-extrabold text-emerald-400 drop-shadow";
+                }
+            }
+
+            // Render Lists
+            renderIncomeList();
+            renderExpenseList();
+
+            // 50/30/20 Rule Calculations
+            const needs50 = totalInc * 0.50;
+            const wants30 = totalInc * 0.30;
+            const savings20 = totalInc * 0.20;
+
+            document.getElementById('rule50Val').innerText = formatSerbianDecimal(needs50) + ' RSD';
+            document.getElementById('rule30Val').innerText = formatSerbianDecimal(wants30) + ' RSD';
+            document.getElementById('rule20Val').innerText = formatSerbianDecimal(savings20) + ' RSD';
+
+            // Bars
+            const maxVal = totalInc > 0 ? totalInc : 1;
+            document.getElementById('rule50Bar').style.width = Math.min(100, (totalExp / maxVal) * 100) + '%';
+            document.getElementById('rule30Bar').style.width = totalInc > 0 ? '30%' : '0%';
+            document.getElementById('rule20Bar').style.width = totalInc > 0 ? '20%' : '0%';
+
+            // Repayment & Slider calculations
+            updateSliderCalculations();
+
+            // Modern Chart Update
+            updateChartData();
+        }
+
+        function renderIncomeList() {
+            const container = document.getElementById('incomeList');
+            container.innerHTML = incomes.map(item => `
+                <div class="flex items-center justify-between bg-slate-800/60 p-2 rounded-xl border border-slate-700/50 text-xs hover:border-emerald-500/30 transition">
+                    <div class="flex items-center space-x-2">
+                        <span class="w-2.5 h-2.5 rounded-full" style="background-color: ${item.color}"></span>
+                        <span class="font-medium text-slate-200">${item.name}</span>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <span class="font-bold text-emerald-400 mr-1">${formatSerbianDecimal(item.amount)} RSD</span>
+                        <button onclick="openEditModal('income', ${item.id})" class="text-slate-400 hover:text-amber-400 p-1 transition" title="Izmeni"><i class="fa-solid fa-pen-to-square"></i></button>
+                        <button onclick="removeIncome(${item.id})" class="text-slate-400 hover:text-rose-400 p-1 transition" title="Obriši"><i class="fa-solid fa-trash-can"></i></button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function renderExpenseList() {
+            const container = document.getElementById('expenseList');
+            container.innerHTML = expenses.map(item => `
+                <div class="flex items-center justify-between bg-slate-800/60 p-2 rounded-xl border border-slate-700/50 text-xs hover:border-rose-500/30 transition">
+                    <div class="flex items-center space-x-2">
+                        <span class="w-2.5 h-2.5 rounded-full" style="background-color: ${item.color}"></span>
+                        <span class="font-medium text-slate-200">${item.name}</span>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <span class="font-bold text-rose-400 mr-1">${formatSerbianDecimal(item.amount)} RSD</span>
+                        <button onclick="openEditModal('expense', ${item.id})" class="text-slate-400 hover:text-amber-400 p-1 transition" title="Izmeni"><i class="fa-solid fa-pen-to-square"></i></button>
+                        <button onclick="removeExpense(${item.id})" class="text-slate-400 hover:text-rose-400 p-1 transition" title="Obriši"><i class="fa-solid fa-trash-can"></i></button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Slider & Table Repayment Calculations
+        function updateSliderCalculations() {
+            const totalDebt = parseSerbianDecimal(document.getElementById('totalDebtInput').value);
+            const months = parseInt(document.getElementById('monthsSlider').value) || 1;
+            document.getElementById('monthsDisplay').innerText = months + ' meseci';
+
+            const totalInc = incomes.reduce((sum, i) => sum + i.amount, 0);
+            const totalExp = expenses.reduce((sum, e) => sum + e.amount, 0);
+            const netSurplus = Math.max(0, totalInc - totalExp);
+
+            // Required rate for chosen months
+            const requiredPayment = totalDebt / months;
+            document.getElementById('statRequiredPayment').innerText = formatSerbianDecimal(requiredPayment) + ' RSD';
+
+            // Estimated months with current surplus
+            let estText = 'Nespecificirano';
+            if (netSurplus <= 0) {
+                estText = 'Nedovoljno viška primanja';
+            } else {
+                const estMonths = Math.ceil(totalDebt / netSurplus);
+                const years = Math.floor(estMonths / 12);
+                const remMonths = estMonths % 12;
+                estText = estMonths + ' meseci';
+                if (years > 0) {
+                    estText += ` (${years} god. ${remMonths > 0 ? remMonths + ' mes.' : ''})`;
+                }
+            }
+            document.getElementById('estimatedTimeResult').innerText = estText;
+
+            // Generate Amortization Table
+            generateRepaymentTable(totalDebt, months, requiredPayment);
+        }
+
+        function generateRepaymentTable(totalDebt, months, monthlyRate) {
+            const tbody = document.getElementById('repaymentTableBody');
+            let currentDebt = totalDebt;
+            let html = '';
+
+            for (let m = 1; m <= months; m++) {
+                const startBalance = currentDebt;
+                const payment = Math.min(startBalance, monthlyRate);
+                const endBalance = Math.max(0, startBalance - payment);
+                currentDebt = endBalance;
+
+                html += `
+                    <tr class="hover:bg-slate-800/40 transition">
+                        <td class="p-3 font-semibold text-brand-400">Mesec ${m}</td>
+                        <td class="p-3">${formatSerbianDecimal(startBalance)} RSD</td>
+                        <td class="p-3 text-amber-400 font-medium">${formatSerbianDecimal(payment)} RSD</td>
+                        <td class="p-3 font-bold">${formatSerbianDecimal(endBalance)} RSD</td>
+                        <td class="p-3">
+                            ${endBalance === 0 
+                                ? '<span class="bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-full text-[10px] font-bold">Otplaćeno</span>' 
+                                : '<span class="bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded-full text-[10px]">Aktivno</span>'}
+                        </td>
+                    </tr>
+                `;
+
+                if (endBalance === 0) break;
+            }
+
+            tbody.innerHTML = html;
+        }
+
+        // --- Modernized Chart.js Double Donut Chart ---
+        function initChart() {
+            const ctx = document.getElementById('financialChart').getContext('2d');
+            financialChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: [],
+                    datasets: [
+                        // Inner ring: Income
+                        {
+                            label: 'Prihodi',
+                            data: [1],
+                            backgroundColor: ['#10b981'],
+                            borderWidth: 2,
+                            borderColor: '#0f172a',
+                            borderRadius: 6,
+                            hoverOffset: 8,
+                            weight: 0.65
+                        },
+                        // Outer ring: Expenses
+                        {
+                            label: 'Troškovi',
+                            data: [1],
+                            backgroundColor: ['#f43f5e'],
+                            borderWidth: 2,
+                            borderColor: '#0f172a',
+                            borderRadius: 6,
+                            hoverOffset: 8,
+                            weight: 1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: {
+                        animateScale: true,
+                        animateRotate: true,
+                        duration: 800
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                            titleColor: '#cbd5e1',
+                            bodyColor: '#f8fafc',
+                            borderColor: 'rgba(51, 65, 85, 0.5)',
+                            borderWidth: 1,
+                            padding: 10,
+                            boxPadding: 4,
+                            usePointStyle: true,
+                            callbacks: {
+                                label: function(context) {
+                                    const datasetLabel = context.dataset.label || '';
+                                    const value = context.parsed || 0;
+                                    const index = context.dataIndex;
+                                    let itemName = '';
+                                    if (datasetLabel === 'Prihodi' && incomes[index]) {
+                                        itemName = incomes[index].name + ': ';
+                                    } else if (datasetLabel === 'Troškovi' && expenses[index]) {
+                                        itemName = expenses[index].name + ': ';
+                                    }
+                                    return ` ${datasetLabel} (${itemName}${formatSerbianDecimal(value)} RSD)`;
+                                }
+                            }
+                        }
+                    },
+                    cutout: '68%'
+                }
+            });
+        }
+
+        function updateChartData() {
+            if (!financialChart) return;
+
+            const incData = incomes.map(i => i.amount);
+            const incColors = incomes.map(i => i.color);
+
+            const expData = expenses.map(e => e.amount);
+            const expColors = expenses.map(e => e.color);
+
+            financialChart.data.datasets[0].data = incData.length > 0 ? incData : [1];
+            financialChart.data.datasets[0].backgroundColor = incColors.length > 0 ? incColors : ['#334155'];
+
+            financialChart.data.datasets[1].data = expData.length > 0 ? expData : [1];
+            financialChart.data.datasets[1].backgroundColor = expColors.length > 0 ? expColors : ['#475569'];
+
+            financialChart.update();
+        }
+
+        // --- PDF Export & Local Storage Plan Saving ---
+        function exportToPDF() {
+            window.print();
+        }
+
+        function saveCurrentPlan() {
+            const name = prompt('Unesite naziv za ovaj plan:', 'Moj Finansijski Plan - ' + new Date().toLocaleDateString('sr-RS'));
+            if (!name) return;
+
+            const plan = {
+                id: Date.now(),
+                name,
+                date: new Date().toLocaleDateString('sr-RS'),
+                incomes: [...incomes],
+                expenses: [...expenses],
+                debt: document.getElementById('totalDebtInput').value,
+                months: document.getElementById('monthsSlider').value
+            };
+
+            savedPlans.push(plan);
+            localStorage.setItem('fin_plans', JSON.stringify(savedPlans));
+            alert('Plan je uspešno sačuvan!');
+            renderSavedPlans();
+        }
+
+        function renderSavedPlans() {
+            const raw = localStorage.getItem('fin_plans');
+            savedPlans = raw ? JSON.parse(raw) : [];
+
+            const container = document.getElementById('savedPlansList');
+            if (savedPlans.length === 0) {
+                container.innerHTML = '<p class="text-xs text-slate-400 text-center py-4">Nemate sačuvanih planova.</p>';
+                return;
+            }
+
+            container.innerHTML = savedPlans.map(p => `
+                <div class="bg-slate-800 p-3 rounded-xl border border-slate-700 flex justify-between items-center text-xs">
+                    <div>
+                        <p class="font-bold text-white">${p.name}</p>
+                        <p class="text-[10px] text-slate-400">${p.date}</p>
+                    </div>
+                    <button onclick="loadPlan(${p.id})" class="bg-brand-600 hover:bg-brand-500 text-white px-2.5 py-1 rounded-lg text-xs font-medium">Učitaj</button>
+                </div>
+            `).join('');
+        }
+
+        function loadPlan(id) {
+            const plan = savedPlans.find(p => p.id === id);
+            if (!plan) return;
+
+            incomes = plan.incomes || [];
+            expenses = plan.expenses || [];
+            document.getElementById('totalDebtInput').value = plan.debt || '300.000,00';
+            document.getElementById('monthsSlider').value = plan.months || 12;
+
+            updateCalculations();
+            closeModal('savedPlansModal');
+        }
+
+        // --- Theme & View Controls ---
+        function toggleDarkMode() {
+            document.documentElement.classList.toggle('dark');
+        }
+
+        function toggleTexture() {
+            const body = document.getElementById('app-body');
+            body.classList.toggle('bg-textured-dark');
+            body.classList.toggle('bg-slate-950');
+        }
+
+        function adjustZoom(val) {
+            document.getElementById('zoomValue').innerText = val + '%';
+            document.getElementById('app-viewport').style.transform = `scale(${val / 100})`;
+        }
+
+        // --- Modal System ---
+        function openModal(id) {
+            if (id === 'savedPlansModal') renderSavedPlans();
+            document.getElementById(id).classList.remove('hidden');
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.add('hidden');
+        }
+
+        function handleAuth(e) {
+            e.preventDefault();
+            document.getElementById('userAuthStatus').innerText = 'Marko P.';
+            closeModal('authModal');
+        }
+
+        function selectPlan(planType) {
+            alert(`Izabrali ste ${planType} pretplatu! Pokretanje procesa...`);
+            closeModal('pricingModal');
+        }
+
+        // --- i18n Language Selector ---
+        function changeLanguage(lang) {
+            currentLang = lang;
+            const dict = translations[lang] || translations.sr;
+
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                const key = el.getAttribute('data-i18n');
+                if (dict[key]) {
+                    el.innerText = dict[key];
+                }
+            });
+        }
+    </script>
+</body>
+</html>
