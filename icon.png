@@ -1,0 +1,43 @@
+from PIL import Image, ImageDraw
+
+# Create a 512x512 icon matching the FinPlan green wallet theme (#16a34a / #22c55e on #0f172a)
+size = 512
+img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+draw = ImageDraw.Draw(img)
+
+# Rounded square background (#0f172a - slate-900)
+padding = 16
+radius = 110
+draw.rounded_rectangle(
+    [padding, padding, size - padding, size - padding],
+    radius=radius,
+    fill=(15, 23, 42, 255),
+    outline=(34, 197, 94, 255),
+    width=10
+)
+
+# Inner emerald badge (#16a34a -> #22c55e)
+inner_pad = 76
+draw.rounded_rectangle(
+    [inner_pad, inner_pad, size - inner_pad, size - inner_pad],
+    radius=80,
+    fill=(22, 163, 74, 255)
+)
+
+# Draw minimalist wallet icon in white
+w_left, w_top, w_right, w_bottom = 146, 176, 366, 346
+draw.rounded_rectangle([w_left, w_top, w_right, w_bottom], radius=28, fill=(255, 255, 255, 255))
+
+# Top flap / card slot line
+draw.rectangle([w_left + 24, w_top + 32, w_right - 24, w_top + 46], fill=(22, 163, 74, 255))
+
+# Wallet clasp on the right
+clasp_left = 296
+clasp_top = 234
+clasp_right = 376
+clasp_bottom = 294
+draw.rounded_rectangle([clasp_left, clasp_top, clasp_right, clasp_bottom], radius=16, fill=(15, 23, 42, 255))
+draw.ellipse([316, 252, 340, 276], fill=(34, 197, 94, 255))
+
+img.save("icon.png", "PNG")
+print("Saved icon.png")
