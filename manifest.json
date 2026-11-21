@@ -1,0 +1,19 @@
+{
+  "name": "FinPlan & Otplata Dugova",
+  "short_name": "FinPlan",
+  "description": "Finansijski planer, kalkulator otplate dugova i 50/30/20 pravilo",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f172a",
+  "theme_color": "#16a34a",
+  "icons": [
+    {
+      "src": "./icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
